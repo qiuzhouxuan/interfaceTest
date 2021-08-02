@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>邱邱.html</h1>
+    <p>Report generated on 20-Jul-2021 at 16:34:27 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk-16.0.1</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "0.13.1", "py": "1.10.0", "pytest": "6.2.4"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19041-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"allure-pytest": "2.9.43", "assume": "2.4.3", "emoji": "0.2.0", "forked": "1.3.0", "html": "3.1.1", "metadata": "1.11.0", "ordering": "0.6", "rerunfailures": "10.0", "xdist": "2.3.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.9</td></tr></table>
+    <h2>Summary</h2>
+    <p>8 tests ran in 0.89 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">8 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="rerun">0 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestFCArequest::test_get_token</td>
+          <td class="col-duration">0.21</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&#x27;access_token&#x27;: &#x27;eyJraWQiOiJPREl3TVdGbU1qRXdPV1UyTkdJelpHSTRZekkxWmpJNU1qQTFNbVV5WmpNPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiIxMDAwOSIsInRva2VuX3VzZSI6ImFjY2VzcyIsInNjb3BlIjoiY3ZwLmNvbS9zY29wZS9hZG1pbiIsImlzcyI6ImN2cC5jb20iLCJleHAiOjE2MjY3NzM2NjYsImlhdCI6MTYyNjc3MDA2NiwidmVyc2lvbiI6MSwianRpIjoiM2ZmY2IyZTU2MWIxNDg5Nzk5Nzc1ODUzNDllZmIyZjIiLCJjbGllbnRfaWQiOiIxMDAwOSJ9.OiXx6dLQjJpal1kkRyiTiuYpWbJDYg2P20ZslagV-QBeyXa2Oif8naiHZGDgpIVGMwK2h-ys85pm31jKF-YakziHNwxO9lNJmzffXd4k1DljE6NYJUgezBv61vqJvgW99w6cHMb5IHGQXBwMMeVqLW2p3C7TXXxwh0ZUulHxydDV4g-HldbKXgLe-L4cEO3WvH_a02GwJUxPLIGxfYAflauBqNGlBnYl13XHw9krkOm4Xf1SAe3lV_wsC9sXNw1t_9ZmAbddZnG8tJhhqDEfPm5Hoaf-V0GPjPb6SJRSpVUnBDGBXnUFOv3hI4z9_6rwN4bGNkH3V7fXJu-qaHivyA&#x27;, &#x27;expires_in&#x27;: 3600, &#x27;token_type&#x27;: &#x27;Bearer&#x27;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestFCArequest::test_04</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestFCArequest::test_get_uin</td>
+          <td class="col-duration">0.21</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&#x27;code&#x27;: 0, &#x27;msg&#x27;: &#x27;not defined&#x27;, &#x27;data&#x27;: {&#x27;exist&#x27;: &#x27;true&#x27;, &#x27;userid&#x27;: &#x27;144115205364725063&#x27;}}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestFCArequest::test_01</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestFCArequest::test_03</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestFCArequest::test_02</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>武汉测试学习
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestFCArequest::test_get_vin</td>
+          <td class="col-duration">0.22</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;vin&quot;:&quot;REALJEEPTEST00001&quot;,&quot;din&quot;:144116206311727636,&quot;plantName&quot;:null,&quot;trim&quot;:null,&quot;seriesSpecialCode&quot;:null,&quot;fotaCampaignName&quot;:null,&quot;eventId&quot;:&quot;InnerStockingLogicUpdate&quot;,&quot;model&quot;:{&quot;make&quot;:&quot;JEEP&quot;,&quot;brandCode&quot;:&quot;57&quot;,&quot;brandDescription&quot;:&quot;JEEP&quot;,&quot;series&quot;:null,&quot;model&quot;:&quot;M4TM1125M&quot;,&quot;modelYear&quot;:&quot;2021&quot;,&quot;internalColor&quot;:null,&quot;externalColor&quot;:&quot;Brilliant Black&quot;,&quot;modelDescription&quot;:&quot;M4TM1125M&quot;,&quot;bodyStyle&quot;:&quot;74&quot;},&quot;company&quot;:&quot;FCA&quot;,&quot;sdp&quot;:&quot;IGNITE&quot;,&quot;orderNum&quot;:null,&quot;prdRegion&quot;:&quot;CHINA&quot;,&quot;plantCode&quot;:null,&quot;destCounty&quot;:&quot;CN&quot;,&quot;radioModemType&quot;:null,&quot;vehicleType&quot;:&quot;CVP_TBM&quot;,&quot;vehCategory&quot;:&quot;GP&quot;,&quot;engineType&quot;:&quot;H&quot;,&quot;vehicleAttributes&quot;:{&quot;hwType&quot;:null,&quot;chassis&quot;:null,&quot;navigator&quot;:null,&quot;tcuType&quot;:&quot;2&quot;,&quot;destSystem&quot;:null,&quot;sourceSystem&quot;:&quot;VDB&quot;},&quot;salesCategory&quot;:&quot;NON_RENTAL&quot;,&quot;version&quot;:null,&quot;ecuVersion&quot;:null,&quot;bcmVersion&quot;:null,&quot;prodDate&quot;:&quot;2020-06-18T00:00:00.00Z&quot;,&quot;soldRegion&quot;:&quot;CHINA&quot;,&quot;codeType&quot;:&quot;1&quot;,&quot;dealer&quot;:{&quot;dealerCodeOrder&quot;:null,&quot;dealerCodeSell&quot;:null},&quot;year&quot;:&quot;2021&quot;,&quot;bodyCode&quot;:&quot;M4&quot;,&quot;codes&quot;:[{&quot;code&quot;:&quot;1JC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GXW&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MTA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;2NN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;HAF&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MVC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;5DE&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JAB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MW1&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;6AP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JAU&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MXU&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;78F&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JDJ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;NA1&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;AB7&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JFH&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;NBQ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;APA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JHB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;NEC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BAD&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JHC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;NF6&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BCS&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JJB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;NHJ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BCZ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JJM&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;NHM&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BHC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JKA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RCG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BHG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JKL&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RDG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BNB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JKP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RDZ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BNG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JLN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RF5&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BNP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JLP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RF7&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BNS&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JMB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RFP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BNT&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JP3&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RFR&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BRF&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JPU&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RFV&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CBG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JVF&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RHC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CDP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JWA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RHV&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CFN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LA2&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RS2&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CG6&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LA6&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RTE&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CGD&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LAC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RTF&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CGN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LAH&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RTV&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CGU&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LAU&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RTX&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CGW&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LAX&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RTY&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CGZ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LAZ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;SBL&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CJ1&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LBA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;SCC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CJ2&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LBC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;SDF&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CK6&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LCD&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;SUD&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CKK&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LCK&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;TBC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CKT&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LDB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;TMU&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CM6&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LEB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;UQN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CSC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LEP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;WF6&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CSH&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LER&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;WLZ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CSM&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LES&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XAA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CSN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LHD&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XAC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CSR&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LM3&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XC4&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CSW&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LMG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XCP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CU7&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LMX&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XCT&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CUN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LNT&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XEJ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CVB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LPG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XEV&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;DMN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LSB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XG8&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GAM&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LTA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XGA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GFA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MAK&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XGM&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GNA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MCG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XGR&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GNC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MCK&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XJA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GTC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MDE&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XJM&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GWJ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MMP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XLC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GX4&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MNK&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XNS&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GXD&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MRB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XRB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GXT&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MST&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XWT&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XXT&quot;,&quot;builtTimeFlag&quot;:null}],&quot;ecus&quot;:{&quot;hu&quot;:{&quot;serialNumber&quot;:null,&quot;navigator&quot;:null,&quot;drmProductId&quot;:null,&quot;drmFileType&quot;:null,&quot;makeCode&quot;:null,&quot;hwNo&quot;:null,&quot;hwVersion&quot;:null,&quot;swNo&quot;:null,&quot;model&quot;:null,&quot;manufacturer&quot;:null,&quot;partNumber&quot;:null,&quot;firmwareVersion&quot;:null,&quot;radioCode&quot;:null,&quot;type&quot;:null,&quot;bluetoothMacAddr&quot;:null,&quot;deviceOS&quot;:null,&quot;region&quot;:null,&quot;screenSize&quot;:null,&quot;swComponentIdHwNumber&quot;:null,&quot;swComponentIdHwVersion&quot;:null,&quot;fwVersionSwNumber&quot;:null,&quot;fwVersionSwVersion&quot;:null,&quot;fotaHwPartNumber&quot;:null,&quot;fotaSwPartNumber&quot;:null,&quot;stockingLogic&quot;:{&quot;application&quot;:null,&quot;services&quot;:[{&quot;ruleNum&quot;:394,&quot;serviceId&quot;:&quot;SOS&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;HU&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;}],&quot;provisionedApplicationMap&quot;:null}},&quot;tbm&quot;:{&quot;serialNumber&quot;:&quot;0008c02f&quot;,&quot;manufacturer&quot;:&quot;MAGNETI MARELLI&quot;,&quot;region&quot;:&quot;CHINA&quot;,&quot;firmwareVersion&quot;:&quot;202274&quot;,&quot;drmProductId&quot;:&quot;sZwAJ7izcXvWYisNk&quot;,&quot;drmFileType&quot;:&quot;GENERIC&quot;,&quot;hwNo&quot;:null,&quot;hwVersion&quot;:&quot;TBM200C10P&quot;,&quot;swNo&quot;:null,&quot;model&quot;:&quot;TBM&quot;,&quot;partNumber&quot;:&quot;53483936&quot;,&quot;installFlag&quot;:null,&quot;moduleType&quot;:&quot;Shipping&quot;,&quot;deviceOS&quot;:&quot;Linux&quot;,&quot;swComponentIdHwNumber&quot;:null,&quot;swComponentIdHwVersion&quot;:null,&quot;fwVersionSwNumber&quot;:null,&quot;fwVersionSwVersion&quot;:null,&quot;fotaHwPartNumber&quot;:null,&quot;fotaSwPartNumber&quot;:null,&quot;stockingLogic&quot;:{&quot;application&quot;:null,&quot;services&quot;:[{&quot;ruleNum&quot;:16,&quot;serviceId&quot;:&quot;RDL&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:20,&quot;serviceId&quot;:&quot;HBLF&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:17,&quot;serviceId&quot;:&quot;RDU&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:202,&quot;serviceId&quot;:&quot;REON&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:182,&quot;serviceId&quot;:&quot;REOFF&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:177,&quot;serviceId&quot;:&quot;VHSG&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:5,&quot;serviceId&quot;:&quot;SVLA&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:175,&quot;serviceId&quot;:&quot;VRC&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:176,&quot;serviceId&quot;:&quot;DTC&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:11,&quot;serviceId&quot;:&quot;WIFIHOTSPOT&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;}],&quot;provisionedApplicationMap&quot;:null}},&quot;sgw&quot;:null},&quot;modemInfo&quot;:{&quot;iccid&quot;:&quot;89860620220073027877&quot;,&quot;imei&quot;:&quot;460066032277017&quot;,&quot;msisdn&quot;:&quot;1400126977017&quot;,&quot;imsi&quot;:&quot;460066032277017&quot;},&quot;invalidModemInfoFlag&quot;:false,&quot;creator&quot;:&quot;PORTAL&quot;,&quot;updater&quot;:null,&quot;label&quot;:&quot;TEST&quot;,&quot;pcrfMark&quot;:true,&quot;extraType&quot;:null}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_01.py::TestFCArequest::test_get_vin2</td>
+          <td class="col-duration">0.17</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;vin&quot;:&quot;REALJEEPTEST00001&quot;,&quot;din&quot;:144116206311727636,&quot;plantName&quot;:null,&quot;trim&quot;:null,&quot;seriesSpecialCode&quot;:null,&quot;fotaCampaignName&quot;:null,&quot;eventId&quot;:&quot;InnerStockingLogicUpdate&quot;,&quot;model&quot;:{&quot;make&quot;:&quot;JEEP&quot;,&quot;brandCode&quot;:&quot;57&quot;,&quot;brandDescription&quot;:&quot;JEEP&quot;,&quot;series&quot;:null,&quot;model&quot;:&quot;M4TM1125M&quot;,&quot;modelYear&quot;:&quot;2021&quot;,&quot;internalColor&quot;:null,&quot;externalColor&quot;:&quot;Brilliant Black&quot;,&quot;modelDescription&quot;:&quot;M4TM1125M&quot;,&quot;bodyStyle&quot;:&quot;74&quot;},&quot;company&quot;:&quot;FCA&quot;,&quot;sdp&quot;:&quot;IGNITE&quot;,&quot;orderNum&quot;:null,&quot;prdRegion&quot;:&quot;CHINA&quot;,&quot;plantCode&quot;:null,&quot;destCounty&quot;:&quot;CN&quot;,&quot;radioModemType&quot;:null,&quot;vehicleType&quot;:&quot;CVP_TBM&quot;,&quot;vehCategory&quot;:&quot;GP&quot;,&quot;engineType&quot;:&quot;H&quot;,&quot;vehicleAttributes&quot;:{&quot;hwType&quot;:null,&quot;chassis&quot;:null,&quot;navigator&quot;:null,&quot;tcuType&quot;:&quot;2&quot;,&quot;destSystem&quot;:null,&quot;sourceSystem&quot;:&quot;VDB&quot;},&quot;salesCategory&quot;:&quot;NON_RENTAL&quot;,&quot;version&quot;:null,&quot;ecuVersion&quot;:null,&quot;bcmVersion&quot;:null,&quot;prodDate&quot;:&quot;2020-06-18T00:00:00.00Z&quot;,&quot;soldRegion&quot;:&quot;CHINA&quot;,&quot;codeType&quot;:&quot;1&quot;,&quot;dealer&quot;:{&quot;dealerCodeOrder&quot;:null,&quot;dealerCodeSell&quot;:null},&quot;year&quot;:&quot;2021&quot;,&quot;bodyCode&quot;:&quot;M4&quot;,&quot;codes&quot;:[{&quot;code&quot;:&quot;1JC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GXW&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MTA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;2NN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;HAF&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MVC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;5DE&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JAB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MW1&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;6AP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JAU&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MXU&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;78F&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JDJ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;NA1&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;AB7&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JFH&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;NBQ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;APA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JHB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;NEC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BAD&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JHC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;NF6&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BCS&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JJB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;NHJ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BCZ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JJM&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;NHM&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BHC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JKA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RCG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BHG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JKL&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RDG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BNB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JKP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RDZ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BNG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JLN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RF5&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BNP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JLP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RF7&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BNS&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JMB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RFP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BNT&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JP3&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RFR&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;BRF&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JPU&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RFV&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CBG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JVF&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RHC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CDP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;JWA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RHV&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CFN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LA2&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RS2&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CG6&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LA6&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RTE&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CGD&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LAC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RTF&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CGN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LAH&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RTV&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CGU&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LAU&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RTX&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CGW&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LAX&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;RTY&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CGZ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LAZ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;SBL&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CJ1&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LBA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;SCC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CJ2&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LBC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;SDF&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CK6&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LCD&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;SUD&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CKK&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LCK&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;TBC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CKT&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LDB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;TMU&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CM6&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LEB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;UQN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CSC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LEP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;WF6&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CSH&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LER&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;WLZ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CSM&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LES&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XAA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CSN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LHD&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XAC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CSR&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LM3&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XC4&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CSW&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LMG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XCP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CU7&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LMX&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XCT&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CUN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LNT&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XEJ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;CVB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LPG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XEV&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;DMN&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LSB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XG8&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GAM&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;LTA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XGA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GFA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MAK&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XGM&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GNA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MCG&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XGR&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GNC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MCK&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XJA&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GTC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MDE&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XJM&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GWJ&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MMP&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XLC&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GX4&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MNK&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XNS&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GXD&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MRB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XRB&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;GXT&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;MST&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XWT&quot;,&quot;builtTimeFlag&quot;:null},{&quot;code&quot;:&quot;XXT&quot;,&quot;builtTimeFlag&quot;:null}],&quot;ecus&quot;:{&quot;hu&quot;:{&quot;serialNumber&quot;:null,&quot;navigator&quot;:null,&quot;drmProductId&quot;:null,&quot;drmFileType&quot;:null,&quot;makeCode&quot;:null,&quot;hwNo&quot;:null,&quot;hwVersion&quot;:null,&quot;swNo&quot;:null,&quot;model&quot;:null,&quot;manufacturer&quot;:null,&quot;partNumber&quot;:null,&quot;firmwareVersion&quot;:null,&quot;radioCode&quot;:null,&quot;type&quot;:null,&quot;bluetoothMacAddr&quot;:null,&quot;deviceOS&quot;:null,&quot;region&quot;:null,&quot;screenSize&quot;:null,&quot;swComponentIdHwNumber&quot;:null,&quot;swComponentIdHwVersion&quot;:null,&quot;fwVersionSwNumber&quot;:null,&quot;fwVersionSwVersion&quot;:null,&quot;fotaHwPartNumber&quot;:null,&quot;fotaSwPartNumber&quot;:null,&quot;stockingLogic&quot;:{&quot;application&quot;:null,&quot;services&quot;:[{&quot;ruleNum&quot;:394,&quot;serviceId&quot;:&quot;SOS&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;HU&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;}],&quot;provisionedApplicationMap&quot;:null}},&quot;tbm&quot;:{&quot;serialNumber&quot;:&quot;0008c02f&quot;,&quot;manufacturer&quot;:&quot;MAGNETI MARELLI&quot;,&quot;region&quot;:&quot;CHINA&quot;,&quot;firmwareVersion&quot;:&quot;202274&quot;,&quot;drmProductId&quot;:&quot;sZwAJ7izcXvWYisNk&quot;,&quot;drmFileType&quot;:&quot;GENERIC&quot;,&quot;hwNo&quot;:null,&quot;hwVersion&quot;:&quot;TBM200C10P&quot;,&quot;swNo&quot;:null,&quot;model&quot;:&quot;TBM&quot;,&quot;partNumber&quot;:&quot;53483936&quot;,&quot;installFlag&quot;:null,&quot;moduleType&quot;:&quot;Shipping&quot;,&quot;deviceOS&quot;:&quot;Linux&quot;,&quot;swComponentIdHwNumber&quot;:null,&quot;swComponentIdHwVersion&quot;:null,&quot;fwVersionSwNumber&quot;:null,&quot;fwVersionSwVersion&quot;:null,&quot;fotaHwPartNumber&quot;:null,&quot;fotaSwPartNumber&quot;:null,&quot;stockingLogic&quot;:{&quot;application&quot;:null,&quot;services&quot;:[{&quot;ruleNum&quot;:16,&quot;serviceId&quot;:&quot;RDL&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:20,&quot;serviceId&quot;:&quot;HBLF&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:17,&quot;serviceId&quot;:&quot;RDU&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:202,&quot;serviceId&quot;:&quot;REON&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:182,&quot;serviceId&quot;:&quot;REOFF&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:177,&quot;serviceId&quot;:&quot;VHSG&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:5,&quot;serviceId&quot;:&quot;SVLA&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:175,&quot;serviceId&quot;:&quot;VRC&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:176,&quot;serviceId&quot;:&quot;DTC&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;},{&quot;ruleNum&quot;:11,&quot;serviceId&quot;:&quot;WIFIHOTSPOT&quot;,&quot;servCapabilityFlag&quot;:&quot;Y&quot;,&quot;servCat&quot;:&quot;TBM&quot;,&quot;subscriptionBased&quot;:&quot;Y&quot;}],&quot;provisionedApplicationMap&quot;:null}},&quot;sgw&quot;:null},&quot;modemInfo&quot;:{&quot;iccid&quot;:&quot;89860620220073027877&quot;,&quot;imei&quot;:&quot;460066032277017&quot;,&quot;msisdn&quot;:&quot;1400126977017&quot;,&quot;imsi&quot;:&quot;460066032277017&quot;},&quot;invalidModemInfoFlag&quot;:false,&quot;creator&quot;:&quot;PORTAL&quot;,&quot;updater&quot;:null,&quot;label&quot;:&quot;TEST&quot;,&quot;pcrfMark&quot;:true,&quot;extraType&quot;:null}
+<br/></div></td></tr></tbody></table></body></html>
